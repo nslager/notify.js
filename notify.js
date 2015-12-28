@@ -146,9 +146,6 @@
         this.myNotify.addEventListener('error', this, false);
         this.myNotify.addEventListener('close', this, false);
         this.myNotify.addEventListener('click', this, false);
-
-        // this is used for the firefox hack so we know if firefox closed the notification or the user did
-        this.myNotify.openedAt = new Date();
     };
 
     Notify.prototype.onShowNotification = function (e) {
@@ -158,32 +155,6 @@
     };
 
     Notify.prototype.onCloseNotification = function (e) {
-        // BEGIN FIREFOX HACK
-        // DISPLAY A NEW NOTIFICATION RECURSIVELY! SO UGLY. THANK YOU FIREFOX AUTO-CLOSE FOR NOT RESPECTING requireInteraction
-        if (this.options.requireInteraction) {
-            if (navigator.userAgent.indexOf("Firefox") != -1) {
-                var defaultTime = 3990; // firefox default timeout is 4 seconds
-                var now = new Date();
-                if (now - this.myNotify.openedAt > defaultTime) {
-                    var n = new Notify(this.myNotify.title, {
-                        icon: this.options.icon,
-                        body: this.options.body,
-                        lang: this.options.lang,
-                        tag: new Date(),
-                        notifyShow: this.options.notifyShow,
-                        notifyClose: this.options.notifyClose,
-                        notifyClick: this.options.notifyClick,
-                        notifyError: this.options.notifyError,
-                        requireInteraction: this.options.requireInteraction,
-                        closeOnClick: this.options.closeOnClick
-                    });
-                    n.show();
-                    this.destroy();
-                    return;
-                }
-            }
-        }
-        // END FIREFOX HACK
         if (this.onCloseCallback) {
             this.onCloseCallback(e);
         }
@@ -195,7 +166,7 @@
             this.onClickCallback(e);
         }
 
-        // in Chrome 47 notifications stopped closing on their own when clicked.
+        // in Chrome 47 notifications stopped closing on their own when clicked when requiredInteraction is true
         if (this.options.closeOnClick) {
             this.close();
         }
