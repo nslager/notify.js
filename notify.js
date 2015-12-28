@@ -4,12 +4,12 @@
  * License: MIT license
  */
 
-(function(global, factory) {
+(function (global, factory) {
     'use strict';
 
     if (typeof define === 'function' && define.amd) {
         // AMD environment
-        define(function() {
+        define(function () {
             return factory(global, global.document);
         });
     } else if (typeof module !== 'undefined' && module.exports) {
@@ -19,7 +19,7 @@
         // Browser environment
         global.Notify = factory(global, global.document);
     }
-} (typeof window !== 'undefined' ? window : this, function (w, d) {
+}(typeof window !== 'undefined' ? window : this, function (w, d) {
     'use strict';
 
     var N = w.Notification;
@@ -29,7 +29,6 @@
     }
 
     function Notify(title, options) {
-
         if (typeof title !== 'string') {
             throw new Error('Notify(): first arg (title) must be a string.');
         }
@@ -45,7 +44,9 @@
             notifyClose: null,
             notifyClick: null,
             notifyError: null,
-            timeout: null
+            timeout: null,
+            requireInteraction: false,
+            closeOnClick: false // used with the requireInteraction to close the notification after it's been clicked
         };
 
         this.permission = null;
@@ -84,7 +85,7 @@
     // returns true if the browser supports Web Notifications
     // https://developers.google.com/web/updates/2015/05/Notifying-you-of-notificiation-changes
     // @param {perm} for test purposes only
-    Notify.isSupported = function(perm) {
+    Notify.isSupported = function (perm) {
         if (!N || !N.requestPermission) {
             return false;
         }
@@ -107,8 +108,8 @@
     Notify.needsPermission = (N && N.permission && N.permission === 'granted') ? false : true;
 
     // asks the user for permission to display notifications.  Then calls the callback functions is supplied.
-    Notify.requestPermission = function(onPermissionGrantedCallback, onPermissionDeniedCallback) {
-        N.requestPermission(function(perm) {
+    Notify.requestPermission = function (onPermissionGrantedCallback, onPermissionDeniedCallback) {
+        N.requestPermission(function (perm) {
             switch (perm) {
                 case 'granted':
                     Notify.needsPermission = false;
@@ -127,12 +128,14 @@
     };
 
 
-    Notify.prototype.show = function() {
+    Notify.prototype.show = function () {
         this.myNotify = new N(this.title, {
             'body': this.options.body,
-            'tag' : this.options.tag,
-            'icon' : this.options.icon,
-            'lang' : this.options.lang
+            'tag': this.options.tag,
+            'icon': this.options.icon,
+            'lang': this.options.lang,
+            'requireInteraction': this.options.requireInteraction,
+            'closeOnClick': this.options.closeOnClick
         });
 
         if (this.options.timeout && !isNaN(this.options.timeout)) {
@@ -143,59 +146,93 @@
         this.myNotify.addEventListener('error', this, false);
         this.myNotify.addEventListener('close', this, false);
         this.myNotify.addEventListener('click', this, false);
+
+        // this is used for the firefox hack so we know if firefox closed the notification or the user did
+        this.myNotify.openedAt = new Date();
     };
 
-    Notify.prototype.onShowNotification = function(e) {
+    Notify.prototype.onShowNotification = function (e) {
         if (this.onShowCallback) {
             this.onShowCallback(e);
         }
     };
 
-    Notify.prototype.onCloseNotification = function(e) {
+    Notify.prototype.onCloseNotification = function (e) {
+        // BEGIN FIREFOX HACK
+        // DISPLAY A NEW NOTIFICATION RECURSIVELY! SO UGLY. THANK YOU FIREFOX AUTO-CLOSE FOR NOT RESPECTING requireInteraction
+        if (this.options.requireInteraction) {
+            if (navigator.userAgent.indexOf("Firefox") != -1) {
+                var defaultTime = 3990; // firefox default timeout is 4 seconds
+                var now = new Date();
+                if (now - this.myNotify.openedAt > defaultTime) {
+                    var n = new Notify(this.myNotify.title, {
+                        icon: this.options.icon,
+                        body: this.options.body,
+                        lang: this.options.lang,
+                        tag: new Date(),
+                        notifyShow: this.options.notifyShow,
+                        notifyClose: this.options.notifyClose,
+                        notifyClick: this.options.notifyClick,
+                        notifyError: this.options.notifyError,
+                        requireInteraction: this.options.requireInteraction,
+                        closeOnClick: this.options.closeOnClick
+                    });
+                    n.show();
+                    this.destroy();
+                    return;
+                }
+            }
+        }
+        // END FIREFOX HACK
         if (this.onCloseCallback) {
             this.onCloseCallback(e);
         }
         this.destroy();
     };
 
-    Notify.prototype.onClickNotification = function(e) {
+    Notify.prototype.onClickNotification = function (e) {
         if (this.onClickCallback) {
             this.onClickCallback(e);
         }
+
+        // in Chrome 47 notifications stopped closing on their own when clicked.
+        if (this.options.closeOnClick) {
+            this.close();
+        }
     };
 
-    Notify.prototype.onErrorNotification = function(e) {
+    Notify.prototype.onErrorNotification = function (e) {
         if (this.onErrorCallback) {
             this.onErrorCallback(e);
         }
         this.destroy();
     };
 
-    Notify.prototype.destroy = function() {
+    Notify.prototype.destroy = function () {
         this.myNotify.removeEventListener('show', this, false);
         this.myNotify.removeEventListener('error', this, false);
         this.myNotify.removeEventListener('close', this, false);
         this.myNotify.removeEventListener('click', this, false);
     };
 
-    Notify.prototype.close = function() {
+    Notify.prototype.close = function () {
         this.myNotify.close();
     };
 
-    Notify.prototype.handleEvent = function(e) {
+    Notify.prototype.handleEvent = function (e) {
         switch (e.type) {
-        case 'show':
-            this.onShowNotification(e);
-            break;
-        case 'close':
-            this.onCloseNotification(e);
-            break;
-        case 'click':
-            this.onClickNotification(e);
-            break;
-        case 'error':
-            this.onErrorNotification(e);
-            break;
+            case 'show':
+                this.onShowNotification(e);
+                break;
+            case 'close':
+                this.onCloseNotification(e);
+                break;
+            case 'click':
+                this.onClickNotification(e);
+                break;
+            case 'error':
+                this.onErrorNotification(e);
+                break;
         }
     };
 
