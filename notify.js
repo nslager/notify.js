@@ -47,7 +47,7 @@
             notifyError: null,
             timeout: null,
             requireInteraction: false,
-            closeOnClick: false // used with the requireInteraction to close the notification after it's been clicked
+            closeOnClick: false
         };
 
         this.permission = null;
@@ -139,7 +139,7 @@
             'closeOnClick': this.options.closeOnClick
         });
 
-        if (this.options.timeout && !isNaN(this.options.timeout)) {
+        if (!this.options.requireInteraction && this.options.timeout && !isNaN(this.options.timeout)) {
             setTimeout(this.close.bind(this), this.options.timeout * 1000);
         }
 
@@ -167,7 +167,6 @@
             this.onClickCallback(e);
         }
 
-        // in Chrome 47 notifications stopped closing on their own when clicked when requiredInteraction is true
         if (this.options.closeOnClick) {
             this.close();
         }
